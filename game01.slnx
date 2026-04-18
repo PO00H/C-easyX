@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="ninja/ninja.vcxproj" Id="15522eea-61e8-49e0-bc39-0f4eab98d4a9" />
+</Solution>

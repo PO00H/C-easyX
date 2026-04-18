@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="源文件">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="头文件">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="资源文件">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="reference">
+      <UniqueIdentifier>{40f1bb69-068d-4405-bdf3-cbc2474b23d1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="资源文件\images">
+      <UniqueIdentifier>{9b89b862-6236-4a49-966b-39180dc96219}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="资源文件\audio">
+      <UniqueIdentifier>{dd05134a-49b5-43e0-9bc7-1695b7776ab7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="资源文件\levels">
+      <UniqueIdentifier>{fd800e0b-ca33-49f1-b1cf-e9728feb262f}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="game.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="player.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="entity.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="enemy.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="effect_manager.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="game.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="player.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="map.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="input.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="recource_manager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="effect_manager.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="enemy.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="entity.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="reference\盲剑客：《白夜瞬闪》项目计划书.md">
+      <Filter>reference</Filter>
+    </None>
+    <None Include="reference\计划.md">
+      <Filter>reference</Filter>
+    </None>
+    <None Include="reference\day02.md">
+      <Filter>reference</Filter>
+    </None>
+  </ItemGroup>
+</Project>

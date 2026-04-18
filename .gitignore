@@ -1,0 +1,10 @@
+.vs/
+Debug/
+Release/
+*.ipch
+*.obj
+*.exe
+*.pdb
+*.sdf
+bin/
+temp/
