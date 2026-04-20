@@ -15,6 +15,13 @@ struct Particle {
     int maxLife;       // 初始最大寿命（用来算渐变缩小）
 };
 
+// --- day07：定义“记忆残影”结构体 ---
+struct MemoryEcho {
+    Vector2D pos;    // 残影留下的位置
+    float radius;    // 残影的大小
+    int life;        // 剩余存活帧数
+    int maxLife;     // 初始最大寿命（用于计算色彩渐变）
+};
 
 
 // 这个类专门负责各种酷炫的视觉反馈
@@ -34,6 +41,9 @@ private:
         // 每帧更新时，遍历这个数组，更新每个粒子的状态，并删除那些寿命结束的粒子。
     std::vector<Particle> particles;
 
+    // --- day07：残影百宝箱 ---
+    std::vector<MemoryEcho> echoes;
+
 public:
     EffectManager();
 
@@ -51,6 +61,14 @@ public:
     void PlayHitEffect(Vector2D hitPos);
     /*void PlayHitEffect();*/
 
+    // --- day07：残影系统接口 ---
+    void AddMemoryEcho(Vector2D pos, float radius); // 添加残影
+    void DrawEchoes();                              // 渲染残影
+    // --- day07：新增接口，用于在斩杀时打碎记忆 ---
+    void ClearEchoes();
+
+
+    // ============================================================
     // --- 特效查询接口 ---
     // 返回当前的震动偏移量，供导演调用 setorigin
     float GetShakeOffsetX() const;

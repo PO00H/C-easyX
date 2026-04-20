@@ -103,7 +103,7 @@ void Player::Update(const ExMessage& msg)
     // 更新波纹半径
     if (isRippleActive) {
         rippleRadius += rippleSpeed;
-        if (rippleRadius > 800.0f) { // 扩散到屏幕外就消失
+        if (rippleRadius > 200.0f) { // 扩散到屏幕外就消失
             isRippleActive = false;
         }
     }

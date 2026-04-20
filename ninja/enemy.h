@@ -8,9 +8,10 @@ class Enemy : public Entity {
 private:
 	// --- day03：碰撞检测相关 ---
     float radius; // 沙袋的大小
-    // --- day06：波纹探测相关 ---
-    bool isVisible;     // 当前是否可见？
-    int visibleTimer;   // 显身倒计时（帧）
+    
+    // --- day07：声呐防抖锁 ---
+    // 防止一道波纹在穿过身体的几帧内，连续触发多个残影
+    bool hasBeenScannedThisWave;
 
 public:
     // 构造函数
@@ -23,6 +24,7 @@ public:
     // 留一个接口：为了等下的碰撞检测做准备
     float GetRadius() const { return radius; }
 
-    // --- day06：暴露现形接口：被波纹扫到了！ ---
-    void Reveal();
+    // --- day07：防抖锁访问接口 ---
+    bool GetHasBeenScanned() const { return hasBeenScannedThisWave; }
+    void SetHasBeenScanned(bool state) { hasBeenScannedThisWave = state; }
 };

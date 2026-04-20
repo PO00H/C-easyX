@@ -83,6 +83,9 @@ void Game::Update()
 
     effectManager.Update();
 
+    // --- day06&07：让地图的记忆衰减齿轮转起来（扣减倒计时） ---
+    levelMap.Update();
+
     // ==========================================
     // 💥 2. 真正的顿帧魔法 💥
     // ==========================================
@@ -97,18 +100,37 @@ void Game::Update()
     enemy.Update(msg);                              // 把档案袋递给enemy看
 
     // ==========================================
-    // 💥 day06：波纹探测扫描逻辑 💥
+    // 💥 day06&07：波纹扫过时，点亮沿途的墙壁地图 💥
     // ==========================================
-    if (player.GetIsRippleActive() && enemy.GetIsAlive()) {
-        // 1. 计算波纹圆心到敌人的距离
-        float dx = enemy.GetPosition().x - player.GetRippleCenter().x;
-        float dy = enemy.GetPosition().y - player.GetRippleCenter().y;
-        float distance = sqrt(dx * dx + dy * dy);
+    if (player.GetIsRippleActive()) {
+        levelMap.ScanByRipple(player.GetRippleCenter(), player.GetRippleRadius());
+    }
 
-        // 2. 判断波纹边缘是否碰到了敌人
-        // 如果 距离 与 波纹半径 的差值，小于敌人的半径，说明波纹切过敌人的身体了！
-        if (abs(distance - player.GetRippleRadius()) < enemy.GetRadius()) {
-            enemy.Reveal(); // 扫到了！让他显身！
+    // ==========================================
+    // --- day06&07：波纹探测扫描逻辑 ---
+    // ==========================================
+    if (player.GetIsRippleActive()) {
+
+        // 1. 扫描地图墙壁，点亮它们！
+        levelMap.ScanByRipple(player.GetRippleCenter(), player.GetRippleRadius());
+
+        // 2. 扫描敌人（残影逻辑）
+        if (enemy.GetIsAlive()) {
+            float dx = enemy.GetPosition().x - player.GetRippleCenter().x;
+            float dy = enemy.GetPosition().y - player.GetRippleCenter().y;
+            float distance = sqrt(dx * dx + dy * dy);
+
+            if (!enemy.GetHasBeenScanned() && abs(distance - player.GetRippleRadius()) < enemy.GetRadius()) {
+                effectManager.AddMemoryEcho(enemy.GetPosition(), enemy.GetRadius());
+                enemy.SetHasBeenScanned(true);
+            }
+        }
+    }
+    else {
+        // 如果屏幕上没有波纹了（或者波纹结束了），重置所有敌人的防抖锁
+        // 等待玩家下一次踩地板
+        if (!player.GetIsRippleActive()) {
+            enemy.SetHasBeenScanned(false);
         }
     }
 
@@ -129,6 +151,9 @@ void Game::Update()
             enemy.SetIsAlive(false);
             // --- day04：调用特效管理器生成斩杀粒子，传入敌人当前坐标 ---
             effectManager.PlayHitEffect(enemy.GetPosition());
+
+            // --- day07：斩杀成功！除了爆火花，还要瞬间清空残影！ ---
+            effectManager.ClearEchoes();
         }
         else {
             // --- day04：调用特效管理器生成挥空特效 ---
@@ -141,18 +166,23 @@ void Game::Update()
 
 void Game::Draw()
 {
-    // --- day03：直接找effect_manager要这一帧的摇晃偏移量 ---
-
     float offsetX = effectManager.GetShakeOffsetX();
     float offsetY = effectManager.GetShakeOffsetY();
 
     setorigin((int)offsetX, (int)offsetY);
     cleardevice();
 
+    // 1. 画敌人的残影（最底层）
+    effectManager.DrawEchoes();
+
+    // 2. 画被点亮的地图墙壁
+    levelMap.Draw();
+
+    // 3. 画敌人和主角（活着的敌人目前是隐形的）
     enemy.Draw();
     player.Draw();
 
-    // --- day04：在顶层图层渲染粒子特效 ---
+    // 4. 画战斗火花粒子（最顶层）
     effectManager.DrawParticles();
 
     setorigin(0, 0);
