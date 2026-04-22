@@ -34,6 +34,8 @@ private:
     float rippleRadius;   // 波纹当前半径
     float rippleSpeed;    // 波纹扩散速度
 
+    // --- day08：眩晕系统 ---
+    int stunTimer; // 眩晕倒计时
 public:
 
     Player(float startX, float startY);
@@ -50,9 +52,18 @@ public:
     // 为了等下的碰撞检测做准备！
     Vector2D GetSlashStart() const { return slashStart; }
     Vector2D GetSlashEnd() const { return slashEnd; }
+    // 允许在撞墙时强行截短刀光
+    void SetSlashEnd(Vector2D newEnd) { slashEnd = newEnd; }
 
     // --- day06：给导演准备的接口 ---
     bool GetIsRippleActive() const { return isRippleActive; }
     Vector2D GetRippleCenter() const { return rippleCenter; }
     float GetRippleRadius() const { return rippleRadius; }
+
+    // --- day08：眩晕接口 ---
+    void Stun();
+    bool IsStunned() const { return stunTimer > 0; }
+
+    // 💥 加上这一行！告诉物理引擎主角的碰撞半径是 20 像素
+    float GetRadius() const { return 20.0f; }
 };

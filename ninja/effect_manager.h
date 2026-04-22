@@ -5,6 +5,7 @@
 #pragma once
 #include "common.h"
 #include <vector> // --- day04：引入动态数组库，用于管理粒子集合 ---
+#include <graphics.h>
 
 
 // --- day04：定义单个火花粒子的结构体 ---
@@ -23,6 +24,15 @@ struct MemoryEcho {
     int maxLife;     // 初始最大寿命（用于计算色彩渐变）
 };
 
+// --- day09: 扩散波纹的数据包 ---
+struct RippleEffect {
+    float x, y;
+    float currentRadius; // 当前长到多大了
+    float maxRadius;     // 最大能长到多大
+    int timer;           // 存活倒计时
+    int maxTimer;
+    COLORREF color;      // 波纹颜色
+};
 
 // 这个类专门负责各种酷炫的视觉反馈
 class EffectManager 
@@ -43,6 +53,9 @@ private:
 
     // --- day07：残影百宝箱 ---
     std::vector<MemoryEcho> echoes;
+
+    // --- day09：专门装波纹的动态数组 ---
+    std::vector<RippleEffect> dynamicRipples;
 
 public:
     EffectManager();
@@ -76,4 +89,11 @@ public:
 
     // 正在进行特效
     bool IsHitStopping() const;
+
+    // --- day09：生成波纹的接口 ---
+    void AddDynamicRipple(Vector2D pos, float maxRadius, COLORREF color);
+
+    // --- day09：更新和绘制波纹 ---（稍后会在现有的 Update 和 Draw 里调用它们）
+    void UpdateRipples();
+    void DrawRipples();
 };

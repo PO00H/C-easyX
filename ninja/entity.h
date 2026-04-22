@@ -27,4 +27,7 @@ public:
     // 凡是继承 Entity 的，必须自己实现这两个函数！
     virtual void Update(const ExMessage& msg) = 0;
     virtual void Draw() = 0;
+
+    // --- day08：为了在撞墙时能被物理引擎推出去，增加修改坐标的接口 ---
+    void SetPosition(Vector2D newPos) { position = newPos; }
 };

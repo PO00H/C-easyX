@@ -36,21 +36,55 @@ Player::Player(float startX, float startY) : Entity(startX, startY)
     rippleRadius = 0.0f;
     rippleSpeed = 15.0f; // 波纹扩散得快一点
     //===============================================
+    // --- day08：初始化不眩晕 ---
+    stunTimer = 0; 
 }
 
 void Player::Update(const ExMessage& msg)
 {
     // ==========================================
-    // 1. 核心状态检测：我们只需要一个大脑！
+    // 💥 第一步：视觉动画层（必须放在最前面！）
+    // 即使主角被撞晕了，射出去的波纹和留在空中的刀光也应该自然消散
     // ==========================================
+
+    // 1. 刀光计时器自动衰减
+    if (isSlashing) {
+        slashFrames--;
+        if (slashFrames <= 0) {
+            isSlashing = false;
+        }
+    }
+
+    // 2. 更新波纹半径（扩散）
+    if (isRippleActive) {
+        rippleRadius += rippleSpeed;
+        if (rippleRadius > 200.0f) { // 扩散到屏幕外就消失
+            isRippleActive = false;
+        }
+    }
+
+    // ==========================================
+    // 💥 第二步：物理层拦截（剥夺肉体控制权）
+    // ==========================================
+    if (stunTimer > 0) {
+        stunTimer--;
+        return; // 拦截！此时主角被罚站，大脑宕机，下面的按键监听统统不执行！
+    }
+
+
+    // ==========================================
+    // 💥 第三步：玩家控制层（正常自由状态下才会执行）
+    // ==========================================
+
+    // --- 1. 左键蓄力与一闪攻击 ---
     if (GetAsyncKeyState(VK_LBUTTON) & 0x8000)
     {
         isCharging = true; // 进入蓄力状态！
 
-        // --- 能量与特效同步上涨 ---
+        // 能量与特效同步上涨
         if (chargePower < maxChargePower)
         {
-			chargePower += 6.0f;          // 蓄力速度：每帧增加的能量值
+            chargePower += 6.0f;          // 蓄力速度
         }
         // 呼吸光晕时间更新 (蓄力越满，心跳越快)
         auraTime += 0.2f + (chargePower / maxChargePower) * 0.8f;
@@ -62,7 +96,7 @@ void Player::Update(const ExMessage& msg)
         {
             printf("【Player内部】：检测到松手，一闪触发！\n");
 
-            // --- 1. 一闪突进与刀光记录 ---
+            // --- 一闪突进与刀光记录 ---
             float dashDistance = chargePower * 1.0f;
 
             slashStart.x = position.x;
@@ -77,14 +111,10 @@ void Player::Update(const ExMessage& msg)
             isSlashing = true;
             slashFrames = 8;
 
-            // --- 2. 拉响<震动>警报！ ---
-			justSlashed = true; 
-            // GetIsJustSlashed()运行后，返回ture，
-                 // 然后会把这个开关重置回 false，确保震动只持续一瞬间
-			// 这个开关会在 Game::Update() 里
-                 // 被 Game::GetIsJustSlashed() 读到，
+            // --- 拉响<震动>警报！ ---
+            justSlashed = true;
 
-            // --- 3. 所有状态清零 ---
+            // --- 所有状态清零 ---
             chargePower = 0.0f;
             auraTime = 0.0f;
         }
@@ -92,7 +122,7 @@ void Player::Update(const ExMessage& msg)
         isCharging = false;
     }
 
-    // --- day06：右键触发波纹探测 ---
+    // --- 2. 右键触发波纹探测 ---
     // 0x08 对应鼠标右键 (VK_RBUTTON)
     if ((GetAsyncKeyState(VK_RBUTTON) & 0x8000) && !isRippleActive) {
         isRippleActive = true;
@@ -100,18 +130,7 @@ void Player::Update(const ExMessage& msg)
         rippleCenter = position; // 波纹圆心就是玩家当前位置
     }
 
-    // 更新波纹半径
-    if (isRippleActive) {
-        rippleRadius += rippleSpeed;
-        if (rippleRadius > 200.0f) { // 扩散到屏幕外就消失
-            isRippleActive = false;
-        }
-    }
-
-
-    // ==========================================
-    // 2. 处理移动与转动 (自由状态下执行)
-    // ==========================================
+    // --- 3. 处理移动与转动 (没在蓄力时才能走动) ---
     if (!isCharging)
     {
         if (GetAsyncKeyState('W') & 0x8000) position.y -= speed;
@@ -126,19 +145,17 @@ void Player::Update(const ExMessage& msg)
             rotationAngle = atan2(dy, dx);
         }
     }
-
-    // ==========================================
-    // 3. 刀光计时器自动衰减 (不受蓄力状态影响)
-    // ==========================================
-    if (isSlashing) {
-        slashFrames--;
-        if (slashFrames <= 0) {
-            isSlashing = false;
-        }
-    }
 }
 void Player::Draw() 
 {
+    // --- day08：眩晕视觉表现（变红警告） ---
+    if (stunTimer > 0) {
+        setfillcolor(RGB(200, 50, 50)); // 眩晕时身体变成暗红色
+    }
+    else {
+        setfillcolor(WHITE); // 正常是白色
+    }
+
 
     // --- day01 新增视觉反馈：画一个代表蓄力大小的空心圆 ---
     if (isCharging) 
@@ -197,7 +214,7 @@ void Player::Draw()
         circle((int)position.x, (int)position.y, currentRadius);
     }
     // 画一个白色的圆代表玩家
-    setfillcolor(WHITE);
+    // setfillcolor(WHITE);
     solidcircle((int)position.x, (int)position.y, 15);
 
     // 画一条红线代表玩家的“视线”或“刀刃方向”
@@ -237,4 +254,22 @@ bool Player::GetIsJustSlashed()
         return true;
     }
     return false;
+}
+
+// --- day08：触发眩晕惩罚 ---
+void Player::Stun() {
+    // 如果已经在眩晕了，就不要重复重置时间，防止死循环
+    if (stunTimer > 0) return;
+
+    stunTimer = 40;
+
+    // ==========================================
+    // 💥 修复 Bug 2：重置所有冲刺记忆！
+    // ==========================================
+    isCharging = false;
+    chargePower = 0.0f;
+    justSlashed = false;
+
+    // 如果你的 player 类里还有其他控制位移的变量（比如 velocityX/Y）
+    // 统统在这里设为 0！让主角彻底“静止”
 }

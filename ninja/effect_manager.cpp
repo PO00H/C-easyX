@@ -65,6 +65,9 @@ void EffectManager::Update()
             ++it;
         }
     }
+
+	// --- day09：更新波纹生命周期和扩散状态 ---
+    UpdateRipples();
 }
 
 // ==================================================
@@ -156,6 +159,9 @@ void EffectManager::DrawEchoes() {
 
         fillcircle((int)e.pos.x, (int)e.pos.y, (int)e.radius);
     }
+
+	// --- day09：在渲染残影的基础上，叠加渲染波纹！ ---
+    DrawRipples();
 }
 
 // --- day07：清空所有残影 ---
@@ -179,4 +185,50 @@ float EffectManager::GetShakeOffsetY() const
 bool EffectManager::IsHitStopping() const
 {
     return hitStopFrames > 0;
+}
+
+// --- day09：生成波纹的接口 ---
+void EffectManager::AddDynamicRipple(Vector2D pos, float maxRadius, COLORREF color) {
+    // 寿命设置为 45 帧（0.75秒），初始半径为 5
+    dynamicRipples.push_back({ pos.x, pos.y, 5.0f, maxRadius, 45, 45, color });
+}
+
+// --- day09：渲染波纹 ---
+void EffectManager::UpdateRipples() {
+    for (auto it = dynamicRipples.begin(); it != dynamicRipples.end(); ) {
+
+        // 💥 核心数学：Ease-out 缓动扩散！
+        // 距离目标半径越近，扩得越慢，产生非常平滑的声波阻力感
+        it->currentRadius += (it->maxRadius - it->currentRadius) * 0.15f;
+
+        it->timer--; // 寿命减少
+
+        if (it->timer <= 0) {
+            it = dynamicRipples.erase(it); // 死掉就从内存中删掉
+        }
+        else {
+            ++it;
+        }
+    }
+}
+
+// --- day09：渲染波纹 ---
+void EffectManager::DrawRipples() {
+    for (auto& r : dynamicRipples) {
+
+        // 算一下剩余寿命的百分比 (1.0 -> 0.0)
+        float alpha = (float)r.timer / r.maxTimer;
+
+        // 让原本的颜色根据 alpha 变暗（模拟渐渐消失）
+        int red = (int)(GetRValue(r.color) * alpha);
+        int green = (int)(GetGValue(r.color) * alpha);
+        int blue = (int)(GetBValue(r.color) * alpha);
+
+        // 💥 关键：画空心圆！
+        setlinecolor(RGB(red, green, blue));
+        setlinestyle(PS_SOLID, 2); // 线条加粗一点，2 像素宽
+
+        // 用 circle 画空心圆，绝对不用 solidcircle！
+        circle((int)r.x, (int)r.y, (int)r.currentRadius);
+    }
 }

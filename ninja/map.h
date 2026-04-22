@@ -2,6 +2,7 @@
 #pragma once
 #include "common.h"
 #include <vector>
+#include <string>
 
 // --- day06&07：定义地图瓦片的结构体 ---
 struct Tile {
@@ -27,4 +28,13 @@ public:
     // --- day06&07：波纹扫描接口 ---
     // 传入波纹圆心和当前半径，点亮碰到的墙壁
     void ScanByRipple(Vector2D center, float rippleRadius);
+
+    // --- day08：完美贴墙停住算法 ---
+    // 传入当前坐标和半径，返回一个完美贴着墙壁的“安全坐标”
+    // 同时通过 outHit 变量，报告刚才是否发生了一次“撞击”
+    Vector2D ResolveCollision(Vector2D pos, float radius, bool& outHit);
+
+    bool LoadLevel(const std::string& filename, Vector2D& outPlayerPos, std::vector<Vector2D>& outEnemySpawns);
+
+
 };
