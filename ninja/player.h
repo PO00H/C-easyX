@@ -66,4 +66,6 @@ public:
 
     // 💥 加上这一行！告诉物理引擎主角的碰撞半径是 20 像素
     float GetRadius() const { return 20.0f; }
+
+    void ResetStun() { stunTimer = 0; }
 };

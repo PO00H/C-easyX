@@ -194,17 +194,34 @@ void EffectManager::AddDynamicRipple(Vector2D pos, float maxRadius, COLORREF col
 }
 
 // --- day09：渲染波纹 ---
+//void EffectManager::UpdateRipples() {
+//    for (auto it = dynamicRipples.begin(); it != dynamicRipples.end(); ) {
+//
+//        // 💥 核心数学：Ease-out 缓动扩散！
+//        // 距离目标半径越近，扩得越慢，产生非常平滑的声波阻力感
+//        it->currentRadius += (it->maxRadius - it->currentRadius) * 0.15f;
+//
+//        it->timer--; // 寿命减少
+//
+//        if (it->timer <= 0) {
+//            it = dynamicRipples.erase(it); // 死掉就从内存中删掉
+//        }
+//        else {
+//            ++it;
+//        }
+//    }
+//}
 void EffectManager::UpdateRipples() {
     for (auto it = dynamicRipples.begin(); it != dynamicRipples.end(); ) {
 
-        // 💥 核心数学：Ease-out 缓动扩散！
-        // 距离目标半径越近，扩得越慢，产生非常平滑的声波阻力感
-        it->currentRadius += (it->maxRadius - it->currentRadius) * 0.15f;
+        // 💥 视觉优化 1：调优阻尼系数，从 0.15 降到 0.08！
+        // 这会让波纹在爆开的初段极快，但在接近边缘时有一种“粘稠”的停留感，观感更清晰
+        it->currentRadius += (it->maxRadius - it->currentRadius) * 0.08f;
 
-        it->timer--; // 寿命减少
+        it->timer--;
 
         if (it->timer <= 0) {
-            it = dynamicRipples.erase(it); // 死掉就从内存中删掉
+            it = dynamicRipples.erase(it);
         }
         else {
             ++it;
@@ -213,22 +230,61 @@ void EffectManager::UpdateRipples() {
 }
 
 // --- day09：渲染波纹 ---
+//void EffectManager::DrawRipples() {
+//    for (auto& r : dynamicRipples) {
+//
+//        // 算一下剩余寿命的百分比 (1.0 -> 0.0)
+//        float alpha = (float)r.timer / r.maxTimer;
+//
+//        // 让原本的颜色根据 alpha 变暗（模拟渐渐消失）
+//        int red = (int)(GetRValue(r.color) * alpha);
+//        int green = (int)(GetGValue(r.color) * alpha);
+//        int blue = (int)(GetBValue(r.color) * alpha);
+//
+//        // 💥 关键：画空心圆！
+//        setlinecolor(RGB(red, green, blue));
+//        setlinestyle(PS_SOLID, 2); // 线条加粗一点，2 像素宽
+//
+//        // 用 circle 画空心圆，绝对不用 solidcircle！
+//        circle((int)r.x, (int)r.y, (int)r.currentRadius);
+//    }
+//}
 void EffectManager::DrawRipples() {
     for (auto& r : dynamicRipples) {
 
-        // 算一下剩余寿命的百分比 (1.0 -> 0.0)
         float alpha = (float)r.timer / r.maxTimer;
 
-        // 让原本的颜色根据 alpha 变暗（模拟渐渐消失）
-        int red = (int)(GetRValue(r.color) * alpha);
-        int green = (int)(GetGValue(r.color) * alpha);
-        int blue = (int)(GetBValue(r.color) * alpha);
+        // 提取基准颜色
+        int baseR = GetRValue(r.color);
+        int baseG = GetGValue(r.color);
+        int baseB = GetBValue(r.color);
 
-        // 💥 关键：画空心圆！
-        setlinecolor(RGB(red, green, blue));
-        setlinestyle(PS_SOLID, 2); // 线条加粗一点，2 像素宽
+        // 💥 视觉优化 2：多层发光渲染叠加 (Neon Glow)
+        // 我们不画一个圈，而是画 3 个同心圆，向内缩进并逐渐变暗，伪造出“厚度”和“发光边缘”
+        int layers = 3;
+        for (int i = 0; i < layers; i++) {
 
-        // 用 circle 画空心圆，绝对不用 solidcircle！
-        circle((int)r.x, (int)r.y, (int)r.currentRadius);
+            // 外圈最亮，内圈逐渐透明
+            float layerAlpha = alpha * (1.0f - (i * 0.3f));
+            if (layerAlpha <= 0.0f) continue;
+
+            // 颜色叠加衰减
+            int red = (int)(baseR * layerAlpha);
+            int green = (int)(baseG * layerAlpha);
+            int blue = (int)(baseB * layerAlpha);
+
+            setlinecolor(RGB(red, green, blue));
+
+            // 💥 视觉优化 3：外圈用细线，内圈稍微变粗，模拟声波的物理能量衰减
+            int thickness = (i == 0) ? 1 : 2;
+            setlinestyle(PS_SOLID, thickness);
+
+            // 每层向内缩减 2 个像素，形成厚度
+            int drawRadius = (int)(r.currentRadius - i * 2.0f);
+
+            if (drawRadius > 0) {
+                circle((int)r.x, (int)r.y, drawRadius);
+            }
+        }
     }
 }
