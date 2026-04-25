@@ -89,4 +89,9 @@
       <Filter>reference</Filter>
     </None>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\levels\level1.txt">
+      <Filter>资源文件\levels</Filter>
+    </Text>
+  </ItemGroup>
 </Project>

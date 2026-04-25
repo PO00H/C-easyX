@@ -1,40 +1,48 @@
-// map.h
+﻿/******************************************************************************
+ *
+ * [引擎核心图纸] MAP.H
+ *
+ * @desc : 游戏世界的地基。在原有网格物理的基础上，新增了基于 BFS
+ * 算法的全局导航基站，为 AI 提供避障寻路支持。
+ *
+ *=============================================================================
+ * [ 函数导航 (Function Map) ]
+ *
+ * ▶ 1. 生命周期与渲染 (Lifecycle & Render)
+ * ├─ Map()                 : 初始化地图网格
+ * ├─ Update()              : 处理记忆迷雾衰减
+ * └─ Draw()                : 渲染渐变墙壁
+ *
+ * ▶ 2. 核心传感器 (Sensors & Physics)
+ * ├─ ScanByRipple()        : 处理主动波纹点亮
+ * └─ ResolveCollision()    : 九宫格物理挤出
+ *
+ * ▶ 3. AI 导航基站 (Navigation)
+ * └─ GetBestDirection()    : (新增) 生成 BFS 热力图，输出规避墙壁的最佳向量
+ *
+ * ▶ 4. 外部接口 (I/O)
+ * └─ LoadLevel()           : 读取关卡 txt 文件
+ *
+ ******************************************************************************/
 #pragma once
 #include "common.h"
 #include <vector>
 #include <string>
 
-// --- day06&07：定义地图瓦片的结构体 ---
-struct Tile {
-    int type;        // 0: 地板, 1: 墙壁
-    int memoryTimer; // 记忆残留倒计时（0表示完全不可见）
-    int maxMemory;   // 记忆最大时长（用于计算渐变衰减）
-};
-
 class Map {
 private:
-    int tileSize;
-    std::vector<std::vector<Tile>> grid; // 网格地图容器
+    std::vector<std::vector<Tile>> grid;
 
 public:
     Map();
-
-    // 每帧更新瓦片的记忆倒计时
     void Update();
-
-    // 绘制被点亮的地图
     void Draw();
 
-    // --- day06&07：波纹扫描接口 ---
-    // 传入波纹圆心和当前半径，点亮碰到的墙壁
     void ScanByRipple(Vector2D center, float rippleRadius);
-
-    // --- day08：完美贴墙停住算法 ---
-    // 传入当前坐标和半径，返回一个完美贴着墙壁的“安全坐标”
-    // 同时通过 outHit 变量，报告刚才是否发生了一次“撞击”
     Vector2D ResolveCollision(Vector2D pos, float radius, bool& outHit);
 
+    // --- 💥 新增：AI 寻路 GPS 接口 ---
+    Vector2D GetBestDirection(Vector2D startPos, Vector2D targetPos);
+
     bool LoadLevel(const std::string& filename, Vector2D& outPlayerPos, std::vector<Vector2D>& outEnemySpawns);
-
-
 };

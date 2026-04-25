@@ -1,71 +1,89 @@
-﻿// player.h
+﻿/******************************************************************************
+ *
+ * [引擎核心图纸] PLAYER.H
+ *
+ * @desc : 盲剑客实体类。继承自基础 Entity，掌管玩家的核心输入响应、
+ * 蓄力一闪状态机、主动声呐波纹，以及撞墙眩晕的惩罚逻辑。
+ *
+ *=============================================================================
+ * [ 函数导航 (Function Map) ]
+ *
+ * ▶ 1. 生命周期与状态机 (Lifecycle & FSM)
+ * ├─ Player()              : 初始化主角各项体征数值
+ * ├─ Update()              : 处理衰减、眩晕拦截与键鼠输入
+ * └─ Draw()                : 绘制主角、预测轨迹线与心跳光晕
+ *
+ * ▶ 2. 导演查询接口 (Director I/O)
+ * ├─ GetIsJustSlashed()    : (阅后即焚) 查询是否刚刚触发了一闪
+ * ├─ GetSlashStart/End()   : 查询刀光的起点与终点，用于碰撞检测
+ * └─ GetIsRippleActive()   : 查询声呐波纹状态
+ *
+ * ▶ 3. 状态干预接口 (State Modifiers)
+ * ├─ SetSlashEnd()         : 允许外部因撞墙等因素强行截短刀光
+ * ├─ Stun()                : 触发眩晕惩罚并打断所有蓄力状态
+ * └─ ResetStun()           : 强制解除眩晕 (用于战败轮回重置)
+ *
+ ******************************************************************************/
 #pragma once
-// 1：引入头文件
-#include "entity.h" 
+#include "entity.h"
 
-// 2：继承 Entity
+ // ==========================================
+ // [ 主角专属常量配置 ] 
+ // ==========================================
+const float PLAYER_BASE_SPEED = 4.0f;
+const float PLAYER_MAX_CHARGE = 400.0f;
+const float PLAYER_CHARGE_RATE = 6.0f;
+const float RIPPLE_MAX_RADIUS = 200.0f;
+const float RIPPLE_SPREAD_SPEED = 15.0f;
+const int   STUN_DURATION_FRAMES = 40;
+const int   SLASH_EFFECT_FRAMES = 8;
+const float PLAYER_COLLISION_RAD = 20.0f;
+
 class Player : public Entity {
 private:
-    // 3：删除了 Vector2D position; 因为它现在在 protected 里
-
     float speed;
-    float rotationAngle; // 朝向鼠标的角度
+    float rotationAngle;      // 朝向鼠标的角度
 
-    // --- day01：蓄力系统相关变量 ---
-    bool isCharging;      // 开关：是否正在蓄力
-    float chargePower;    // 能量条：当前蓄力值
-    float maxChargePower; // 能量上限：最大蓄力值限制
+    // --- 蓄力系统 ---
+    bool isCharging;          // 是否正在蓄力
+    float chargePower;        // 当前蓄力值
 
-    // --- day02：刀光残影系统 ---
-    bool isSlashing;      // 开关：现在屏幕上需不需要画刀光？
-    int slashFrames;      // 计时器：刀光还能在屏幕上存活几帧？
-    Vector2D slashStart;  // 记忆：一闪的起点
-    Vector2D slashEnd;    // 记忆：一闪的终点
+    // --- 刀光残影系统 ---
+    bool isSlashing;          // 屏幕上需不需要画刀光
+    int slashFrames;          // 刀光存活倒计时
+    Vector2D slashStart;      // 一闪的起点
+    Vector2D slashEnd;        // 一闪的终点
+    bool justSlashed;         // 一次性信号：刚触发了一闪
+    float auraTime;           // 呼吸光晕的跳动时间
 
-    // --- day02：呼吸光晕特效变量 ---
-    float auraTime;       // 记录光晕的跳动时间
+    // --- 声呐探测系统 ---
+    bool isRippleActive;      // 波纹是否正在扩散
+    Vector2D rippleCenter;    // 波纹发射的圆心
+    float rippleRadius;       // 波纹当前半径
 
-    // --- day02：新增接口，供<Game>查询是否刚触发了一闪 ---
-    bool justSlashed;
+    // --- 眩晕惩罚系统 ---
+    int stunTimer;            // 眩晕倒计时
 
-    // --- day06：波纹探测变量 ---
-    bool isRippleActive;  // 波纹是否正在扩散？
-    Vector2D rippleCenter;// 波纹的圆心（踩地板时的位置）
-    float rippleRadius;   // 波纹当前半径
-    float rippleSpeed;    // 波纹扩散速度
-
-    // --- day08：眩晕系统 ---
-    int stunTimer; // 眩晕倒计时
 public:
-
     Player(float startX, float startY);
 
-    // 更新逻辑（传入鼠标消息）
-    void Update(const ExMessage& msg)override;
-    // 绘制自己
+    void Update(const ExMessage& msg) override;
     void Draw();
 
-	// --- day02：新增接口，供<Game>查询是否刚触发了一闪（用于震动系统） ---
-    bool GetIsJustSlashed(); // 新增：告诉导演我拔刀了
-
-	// --- day03：预留接口，供<Game>查询刀光的起点和终点 ---
-    // 为了等下的碰撞检测做准备！
+    // --- 导演查询接口 ---
+    bool GetIsJustSlashed();
     Vector2D GetSlashStart() const { return slashStart; }
     Vector2D GetSlashEnd() const { return slashEnd; }
-    // 允许在撞墙时强行截短刀光
-    void SetSlashEnd(Vector2D newEnd) { slashEnd = newEnd; }
 
-    // --- day06：给导演准备的接口 ---
     bool GetIsRippleActive() const { return isRippleActive; }
     Vector2D GetRippleCenter() const { return rippleCenter; }
     float GetRippleRadius() const { return rippleRadius; }
 
-    // --- day08：眩晕接口 ---
-    void Stun();
+    float GetRadius() const { return PLAYER_COLLISION_RAD; }
     bool IsStunned() const { return stunTimer > 0; }
 
-    // 💥 加上这一行！告诉物理引擎主角的碰撞半径是 20 像素
-    float GetRadius() const { return 20.0f; }
-
+    // --- 状态干预接口 ---
+    void SetSlashEnd(Vector2D newEnd) { slashEnd = newEnd; }
+    void Stun();
     void ResetStun() { stunTimer = 0; }
 };

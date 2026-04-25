@@ -1,99 +1,101 @@
-// --- day03:effect_manager.h ---
-/*
-特效
-*/
+/******************************************************************************
+ *
+ * [引擎核心图纸] EFFECT_MANAGER.H
+ *
+ * @desc : 游戏的视觉灵魂与反馈中枢。掌管屏幕震动、时间顿帧、
+ * 高爆粒子物理、记忆残影叠加以及霓虹波纹扩散渲染。
+ *
+ *=============================================================================
+ * [ 函数导航 (Function Map) ]
+ *
+ * ▶ 1. 生命周期 (Lifecycle)
+ * ├─ EffectManager()       : 初始化特效管家状态
+ * └─ Update()              : 统筹所有粒子、波纹、残影与震动的时间衰减与物理运动
+ *
+ * ▶ 2. 打击反馈系统 (Impact Feedback)
+ * ├─ PlayMissEffect()      : 挥空反馈（轻微震动）
+ * └─ PlayHitEffect()       : 斩杀反馈（剧烈震动 + 顿帧 + 爆炸火花）
+ *
+ * ▶ 3. 视觉渲染管线 (Rendering Pipeline)
+ * ├─ DrawParticles()       : 渲染极速衰减的火花拖尾线
+ * ├─ DrawEchoes()          : 渲染实心记忆残影，并叠加调用波纹渲染
+ * └─ DrawRipples()         : 内部调用：执行霓虹发光(Neon Glow)叠加渲染
+ *
+ * ▶ 4. 数据调度接口 (Data IO)
+ * ├─ AddMemoryEcho()       : 注入新的记忆残影
+ * ├─ AddDynamicRipple()    : 注入新的环境动态波纹
+ * ├─ ClearEchoes()         : 强制清空残影(用于战败/斩杀瞬间)
+ * └─ GetShakeOffset...()   : 输出震动偏移量，供导演(Game)晃动摄像机
+ *
+ ******************************************************************************/
 #pragma once
 #include "common.h"
-#include <vector> // --- day04：引入动态数组库，用于管理粒子集合 ---
+#include <vector>
 #include <graphics.h>
 
-
-// --- day04：定义单个火花粒子的结构体 ---
+ // ==========================================
+ // [ 特效组件结构体 ] 
+ // ==========================================
 struct Particle {
-    Vector2D pos;      // 当前位置
-    Vector2D velocity; // 速度
+    Vector2D pos;      // 当前绝对坐标
+    Vector2D velocity; // 飞行向量速度
     int life;          // 剩余寿命
-    int maxLife;       // 初始最大寿命（用来算渐变缩小）
+    int maxLife;       // 初始最大寿命
 };
 
-// --- day07：定义“记忆残影”结构体 ---
 struct MemoryEcho {
-    Vector2D pos;    // 残影留下的位置
-    float radius;    // 残影的大小
-    int life;        // 剩余存活帧数
-    int maxLife;     // 初始最大寿命（用于计算色彩渐变）
+    Vector2D pos;
+    float radius;
+    int life;
+    int maxLife;
 };
 
-// --- day09: 扩散波纹的数据包 ---
 struct RippleEffect {
     float x, y;
-    float currentRadius; // 当前长到多大了
-    float maxRadius;     // 最大能长到多大
-    int timer;           // 存活倒计时
+    float currentRadius;
+    float maxRadius;
+    int timer;
     int maxTimer;
-    COLORREF color;      // 波纹颜色
+    COLORREF color;
 };
 
-// 这个类专门负责各种酷炫的视觉反馈
-class EffectManager 
-{
+// ==========================================
+// [ 管家类定义 ] 
+// ==========================================
+class EffectManager {
 private:
-    // --- 震动系统 ---
+    // --- 震动与顿帧系统 ---
     float shakeIntensity;
     int shakeTimer;
+    int hitStopFrames;
 
-    // --- 顿帧系统 ---
-    int hitStopFrames; // 还要卡顿多少帧？
-
-    // --- day04：声明粒子集合容器 ---
-	    // 用一个动态数组（std::vector）来存储所有活着的粒子，
-        // 每当生成新粒子时，就往这个数组里添加；
-        // 每帧更新时，遍历这个数组，更新每个粒子的状态，并删除那些寿命结束的粒子。
+    // --- 视觉实体容器 ---
     std::vector<Particle> particles;
-
-    // --- day07：残影百宝箱 ---
     std::vector<MemoryEcho> echoes;
-
-    // --- day09：专门装波纹的动态数组 ---
     std::vector<RippleEffect> dynamicRipples;
+
+    // 内部私有方法
+    void UpdateRipples();
+    void DrawRipples();
 
 public:
     EffectManager();
 
-    // 每帧更新（处理特效衰减）
     void Update();
 
-    // --- day04：渲染粒子集合 ---
-    void DrawParticles();
-
-    // 触发普通挥空特效（轻微震动）
+    // --- 接口：打击系统 ---
     void PlayMissEffect();
-
-    // 触发斩杀特效（剧烈震动 + 顿帧）
-    // --- day04：修改斩杀特效接口，增加击中坐标参数以确定粒子生成位置 ---
     void PlayHitEffect(Vector2D hitPos);
-    /*void PlayHitEffect();*/
-
-    // --- day07：残影系统接口 ---
-    void AddMemoryEcho(Vector2D pos, float radius); // 添加残影
-    void DrawEchoes();                              // 渲染残影
-    // --- day07：新增接口，用于在斩杀时打碎记忆 ---
-    void ClearEchoes();
-
-
-    // ============================================================
-    // --- 特效查询接口 ---
-    // 返回当前的震动偏移量，供导演调用 setorigin
+    bool IsHitStopping() const;
     float GetShakeOffsetX() const;
     float GetShakeOffsetY() const;
 
-    // 正在进行特效
-    bool IsHitStopping() const;
-
-    // --- day09：生成波纹的接口 ---
+    // --- 接口：记忆与雷达系统 ---
+    void AddMemoryEcho(Vector2D pos, float radius);
     void AddDynamicRipple(Vector2D pos, float maxRadius, COLORREF color);
+    void ClearEchoes();
 
-    // --- day09：更新和绘制波纹 ---（稍后会在现有的 Update 和 Draw 里调用它们）
-    void UpdateRipples();
-    void DrawRipples();
+    // --- 接口：渲染管线 ---
+    void DrawParticles();
+    void DrawEchoes();
 };

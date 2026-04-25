@@ -1,69 +1,39 @@
 ﻿/******************************************************************************
  *
- * [引擎核心] GAME.CPP  -- (Day 09 封版：FSM 状态机 & 双重雷达系统)
+ * [引擎核心逻辑] GAME.CPP
  *
- * @desc  : 游戏全局导演类。统筹物理碰撞、AI 调度、核心玩法循环与视觉渲染。
- *
- *=============================================================================
- * [ 函数导航与功能地图 ]
- *
- * ▶ 1. 生命周期 (Lifecycle)
- * Game()          : 读取外部关卡 (txt)、初始化出生点、重置 AI 巡逻锚点
- * Run()           : 游戏主循环 (16ms)，负责唤醒 Update 和 Draw
- *
- * ▶ 2. 物理与底层算法 (Physics & Math)
- * CheckCollision(): 线段与圆的极速相交判定 (利用向量点乘与投影比例)
- *
- * ▶ 3. 核心运算枢纽 (The Brain)
- * Update()        : 统筹单帧内的所有运算，严格按照以下顺序执行：
- * ├─ a. AI 投喂   : 将主角坐标与噪音信号塞给敌人大脑
- * ├─ b. CCD防穿模 : 高速位移的步进式检测、撞墙眩晕惩罚
- * ├─ c. 主动雷达  : 玩家踩地板 -> 擦过敌人 -> 生成实心残影
- * ├─ d. 被动雷达  : 动态频率运算 -> 生成压迫感空心涟漪
- * └─ e. 斩杀结算  : 验证刀光碰撞，触发火花特效与死亡清理
- *
- * ▶ 4. 视觉呈现 (Rendering)
- * Draw()          : 摄像机调度。处理屏幕摇晃、受击闪红底色及多图层叠加
- * (渲染顺序: 残影底层 -> 地图 -> 实体 -> 粒子顶层)
+ * @desc : 游戏全局导演的具体实现。全面升级为 std::vector 驱动的多敌同屏架构。
  *
  ******************************************************************************/
 #include "game.h"
 #include <graphics.h>
 #include <iostream>
 #include <math.h>
-#include "map.h"
-#include "enemy.h"
 
-
-// --- day03：碰撞检测算法 ---
+ // ==========================================
+ // ▶ 1. 底层物理算法
+ // ==========================================
 bool Game::CheckCollision(Vector2D A, Vector2D B, Vector2D center, float r)
 {
-    // 1. 把点变成向量：算出线段 AB 和向量 AC
     Vector2D AB = { B.x - A.x, B.y - A.y };
     Vector2D AC = { center.x - A.x, center.y - A.y };
 
-    // 2. 算一下线段 AB 到底有多长？（用勾股定理，但不开根号，省 CPU）
     float lengthSq = AB.x * AB.x + AB.y * AB.y;
 
-    // 防御性编程：如果主角根本没动（长度为 0），直接算点 A 到圆心的距离
     if (lengthSq == 0.0f) {
         float dx = center.x - A.x;
         float dy = center.y - A.y;
         return (dx * dx + dy * dy) <= (r * r);
     }
 
-    // 3. 算投影比例 t
     float t = (AC.x * AB.x + AC.y * AB.y) / lengthSq;
 
-    // 4. 把影子强行拉回到线段上
     if (t < 0.0f) t = 0.0f;
     if (t > 1.0f) t = 1.0f;
 
-    // 5. 找到线段上，距离圆心【最近】的那个点
     float closestX = A.x + t * AB.x;
     float closestY = A.y + t * AB.y;
 
-    // 6. 算出圆心到这个点的距离
     float dx = center.x - closestX;
     float dy = center.y - closestY;
     float distSq = dx * dx + dy * dy;
@@ -71,45 +41,44 @@ bool Game::CheckCollision(Vector2D A, Vector2D B, Vector2D center, float r)
     return distSq <= (r * r);
 }
 
-// --- day 09：重置关卡逻辑 ---
-void Game::ResetGame() {
-    isGameOver = false;
-
-    // 1. 使用记忆中的坐标，而不是写死的 400
-    player.SetPosition(spawnPosPlayer);
-    player.ResetStun();
-
-    // 2. 使用记忆中的坐标，而不是写死的 600
-    enemy.SetIsAlive(true);
-    enemy.SetPosition(spawnPosEnemy);
-    enemy.ResetPatrolBounds();
-
-    // 3. 抹除所有死亡残留的视觉信号
-    effectManager.ClearEchoes();
-}
-
-// 构造函数：初始化玩家出生点
-Game::Game() : player(400.0f, 300.0f), enemy(600.0f, 300.0f), isRunning(true)
+// ==========================================
+// ▶ 2. 生命周期与轮回系统
+// ==========================================
+Game::Game() : player(400.0f, 300.0f), isRunning(true), isGameOver(false)
 {
-    // ==========================================
-    // 💥 覆盖行动：读取外部地图真实数据！
-    // ==========================================
     Vector2D playerSpawn;
     std::vector<Vector2D> enemySpawns;
 
+    // 💥 载入地图，解析多敌出生点
     if (levelMap.LoadLevel("assets/levels/level1.txt", playerSpawn, enemySpawns)) {
         player.SetPosition(playerSpawn);
-        spawnPosPlayer = playerSpawn; // 👈 存入记忆
+        spawnPosPlayer = playerSpawn;
 
-        if (!enemySpawns.empty()) {
-            enemy.SetPosition(enemySpawns[0]);
-            enemy.ResetPatrolBounds(); // 根据出生点重置巡逻范围
-            spawnPosEnemy = enemySpawns[0]; // 👈 存入记忆
+        // 动态生成敌军大队！
+        for (const Vector2D& pos : enemySpawns) {
+            Enemy newEnemy(pos.x, pos.y);
+            newEnemy.ResetPatrolBounds();
+            enemies.push_back(newEnemy);
+            spawnPosEnemies.push_back(pos); // 记住每一个敌人的出生点
         }
     }
     else {
-        printf("【警告】地图文件加载失败！请检查 assets/levels/level1.txt 路径！\n");
+        printf("【警告】地图文件加载失败！请检查文件路径！\n");
     }
+}
+
+// game.cpp
+void Game::ResetGame() {
+    isGameOver = false;
+    player.SetPosition(spawnPosPlayer);
+    player.ResetStun();
+
+    // 💥 修复：调用 Enemy 的 Reset 方法，彻底清理大脑
+    for (int i = 0; i < (int)enemies.size(); i++) {
+        enemies[i].Reset(spawnPosEnemies[i]);
+    }
+
+    effectManager.ClearEchoes();
 }
 
 void Game::Run() {
@@ -127,122 +96,43 @@ void Game::Run() {
 }
 
 // ==========================================
-// 📜 历史足迹：Day 06 - Day 08 的旧版逻辑
-// (保留作为参考，不参与运行)
-// ==========================================
-/*
-void Game::Update()
-{
-    ExMessage msg = { 0 };
-    while (peekmessage(&msg, EX_MOUSE | EX_KEY)) {}
-
-    effectManager.Update();
-    levelMap.Update();
-
-    if (effectManager.IsHitStopping()) {
-        return;
-    }
-
-    player.Update(msg);
-    enemy.Update(msg);
-
-    bool isHitWall = false;
-    Vector2D safePos = levelMap.ResolveCollision(player.GetPosition(), player.GetRadius(), isHitWall);
-    player.SetPosition(safePos);
-
-    if (isHitWall && !player.IsStunned()) {
-        player.Stun();
-        effectManager.PlayMissEffect();
-    }
-
-    bool enemyHitWall = false;
-    Vector2D enemySafePos = levelMap.ResolveCollision(enemy.GetPosition(), enemy.GetRadius(), enemyHitWall);
-    enemy.SetPosition(enemySafePos);
-
-    if (player.GetIsRippleActive()) {
-        levelMap.ScanByRipple(player.GetRippleCenter(), player.GetRippleRadius());
-
-        if (enemy.GetIsAlive()) {
-            float dx = enemy.GetPosition().x - player.GetRippleCenter().x;
-            float dy = enemy.GetPosition().y - player.GetRippleCenter().y;
-            float distance = sqrt(dx * dx + dy * dy);
-
-            if (!enemy.GetHasBeenScanned() && abs(distance - player.GetRippleRadius()) < enemy.GetRadius()) {
-                effectManager.AddMemoryEcho(enemy.GetPosition(), enemy.GetRadius());
-                enemy.SetHasBeenScanned(true);
-            }
-        }
-    }
-    else {
-        if (!player.GetIsRippleActive()) {
-            enemy.SetHasBeenScanned(false);
-        }
-    }
-
-    if (player.GetIsJustSlashed()) {
-        bool isHit = CheckCollision(
-            player.GetSlashStart(),
-            player.GetSlashEnd(),
-            enemy.GetPosition(),
-            enemy.GetRadius()
-        );
-
-        if (isHit && enemy.GetIsAlive()) {
-            enemy.SetIsAlive(false);
-            effectManager.PlayHitEffect(enemy.GetPosition());
-            effectManager.ClearEchoes();
-        }
-        else {
-            effectManager.PlayMissEffect();
-        }
-    }
-}
-*/
-
-// ==========================================
-// 💥 现行逻辑：Day 09 终极 FSM + 双重雷达版
+// ▶ 3. 核心调度与更新逻辑
 // ==========================================
 void Game::Update()
 {
-    // --- day 09：Update 里的终焉判定 ---
+    static int globalTimer = 0; // 引入全局时钟
+    globalTimer++;
+
+    // --- 输入监听与轮回判定 ---
     ExMessage msg = { 0 };
     while (peekmessage(&msg, EX_MOUSE | EX_KEY)) {
-        // 如果死了，监听 R 键重生
         if (isGameOver && msg.message == WM_KEYDOWN && msg.vkcode == 'R') {
             ResetGame();
         }
     }
 
-    // ==========================================
-    // 💥 修复点：找回丢失的时间齿轮！波纹不扩和屏幕乱抖全是因为少了这三行！
-    // ==========================================
+    // --- 管家系统更新 ---
     effectManager.Update();
     levelMap.Update();
+
     if (effectManager.IsHitStopping()) {
         return;
     }
 
-    if (isGameOver) return; // 💥 死了就别计算物理和 AI 了，世界静止
+    if (isGameOver) return; // 💥 世界静止
 
-    // 1. 记下移动前的安全坐标
+    // --- 1. 主角逻辑与防穿模 ---
     Vector2D oldPlayerPos = player.GetPosition();
-
-    // 2. 更新玩家逻辑
     player.Update(msg);
-
-    // 3. AI 情报投喂 (噪音判定)
-    bool isNoiseActive = player.GetIsRippleActive();
-    enemy.UpdateAI(player.GetPosition(), isNoiseActive);
-
     Vector2D newPlayerPos = player.GetPosition();
 
-    // 4. 小碎步防穿模系统 (CCD)
     bool isHitWall = false;
     Vector2D safePos = oldPlayerPos;
     float moveDx = newPlayerPos.x - oldPlayerPos.x;
     float moveDy = newPlayerPos.y - oldPlayerPos.y;
     float moveDist = sqrt(moveDx * moveDx + moveDy * moveDy);
 
+    // CCD 步进检测
     if (moveDist > 5.0f) {
         int steps = (int)(moveDist / 5.0f) + 1;
         float stepX = moveDx / steps;
@@ -265,7 +155,6 @@ void Game::Update()
 
     player.SetPosition(safePos);
 
-    // 5. 状态检查与刀光修复
     bool hasSlashed = player.GetIsJustSlashed();
     if (hasSlashed) {
         player.SetSlashEnd(safePos);
@@ -276,129 +165,128 @@ void Game::Update()
         effectManager.PlayMissEffect();
     }
 
-    // 敌人碰撞
-    bool enemyHitWall = false;
-    Vector2D enemySafePos = levelMap.ResolveCollision(enemy.GetPosition(), enemy.GetRadius(), enemyHitWall);
-    enemy.SetPosition(enemySafePos);
+    // --- 2. 敌军群集逻辑运算 (必须加 & 引用) ---
+    bool isNoiseActive = player.GetIsRippleActive();
 
-    // 6. 主动探测 (实心残影)
-    if (player.GetIsRippleActive()) {
-        levelMap.ScanByRipple(player.GetRippleCenter(), player.GetRippleRadius());
+    for (Enemy& e : enemies) {
+        if (!e.GetIsAlive()) continue;
 
-        if (enemy.GetIsAlive()) {
-            float dx = enemy.GetPosition().x - player.GetRippleCenter().x;
-            float dy = enemy.GetPosition().y - player.GetRippleCenter().y;
+        // A. AI 投喂
+        e.UpdateAI(player.GetPosition(), isNoiseActive, levelMap);
+
+        // B. 敌人防穿模
+        bool enemyHitWall = false;
+        Vector2D enemySafePos = levelMap.ResolveCollision(e.GetPosition(), e.GetRadius(), enemyHitWall);
+        e.SetPosition(enemySafePos);
+
+        // C. 主动探测雷达 (实心残影)
+        if (isNoiseActive) {
+            float dx = e.GetPosition().x - player.GetRippleCenter().x;
+            float dy = e.GetPosition().y - player.GetRippleCenter().y;
             float distance = sqrt(dx * dx + dy * dy);
 
-            if (!enemy.GetHasBeenScanned() && abs(distance - player.GetRippleRadius()) < enemy.GetRadius()) {
-                effectManager.AddMemoryEcho(enemy.GetPosition(), enemy.GetRadius());
-                enemy.SetHasBeenScanned(true);
+            if (!e.GetHasBeenScanned() && abs(distance - player.GetRippleRadius()) < e.GetRadius()) {
+                effectManager.AddMemoryEcho(e.GetPosition(), e.GetRadius());
+                e.SetHasBeenScanned(true);
             }
         }
-    }
-    else {
-        enemy.SetHasBeenScanned(false);
-    }
+        else {
+            e.SetHasBeenScanned(false);
+        }
 
-    // 7. 被动雷达 (空心波纹：心跳/脚步声)
-    if (enemy.GetIsAlive()) {
-        float dx = enemy.GetPosition().x - player.GetPosition().x;
-        float dy = enemy.GetPosition().y - player.GetPosition().y;
-        float distToEnemy = sqrt(dx * dx + dy * dy);
+        // D. 被动压迫雷达 (产生心跳/脚步涟漪)
+        float distToPlayer = sqrt(pow(e.GetPosition().x - player.GetPosition().x, 2) + pow(e.GetPosition().y - player.GetPosition().y, 2));
 
-        if (enemy.GetCurrentState() == EnemyState::CHASE) {
-            static int chaseTimer = 0;
-            chaseTimer++;
-            if (chaseTimer >= 15) {
-                effectManager.AddDynamicRipple(enemy.GetPosition(), 30.0f, RGB(255, 50, 50));
-                chaseTimer = 0;
+        if (e.GetCurrentState() == EnemyState::CHASE) {
+            // 💥 狂暴心跳：追击时，每 15 帧（约0.25秒）极其稳定地爆发一次红色涟漪
+            if (globalTimer % 15 == 0) {
+                effectManager.AddDynamicRipple(e.GetPosition(), 30.0f, RGB(255, 50, 50));
             }
         }
-        else if (distToEnemy < 150.0f) {
-            static int tensionTimer = 0;
-            tensionTimer++;
-            int threshold = (int)((distToEnemy / 150.0f) * 60.0f);
-            if (threshold < 15) threshold = 15;
-            if (tensionTimer >= threshold) {
-                effectManager.AddDynamicRipple(enemy.GetPosition(), 60.0f, RGB(50, 150, 255));
-                tensionTimer = 0;
+        else if (distToPlayer < 150.0f) {
+            // 👣 警觉脚步：靠近时，每 60 帧（约1秒）稳定释放一次蓝色涟漪
+            // 魔法细节：加上 e.GetPosition().x 来错开不同敌人的频率，防止所有敌人同时亮起，形成错落有致的压迫感！
+            if ((globalTimer + (int)e.GetPosition().x) % 60 == 0) {
+                effectManager.AddDynamicRipple(e.GetPosition(), 60.0f, RGB(50, 150, 255));
             }
         }
-    }
 
-    // 8. 斩杀判定
-    if (hasSlashed) {
-        bool isHit = CheckCollision(
-            player.GetSlashStart(),
-            player.GetSlashEnd(),
-            enemy.GetPosition(),
-            enemy.GetRadius()
-        );
+        // E. 斩杀判定
+        if (hasSlashed) {
+            bool isHit = CheckCollision(player.GetSlashStart(), player.GetSlashEnd(), e.GetPosition(), e.GetRadius());
+            if (isHit) {
+                e.SetIsAlive(false);
+                effectManager.PlayHitEffect(e.GetPosition());
+                effectManager.ClearEchoes();
+            }
+        }
 
-        if (isHit && enemy.GetIsAlive()) {
-            enemy.SetIsAlive(false);
-            effectManager.PlayHitEffect(enemy.GetPosition());
+        // F. 终焉判定 (被抓)
+        float catchDist = player.GetRadius() + e.GetRadius();
+        if (distToPlayer * distToPlayer < catchDist * catchDist) {
+            isGameOver = true;
+            effectManager.PlayMissEffect();
             effectManager.ClearEchoes();
         }
     }
-    // --- 死亡判定段 ---
-    if (enemy.GetIsAlive()) {
-        float dx = enemy.GetPosition().x - player.GetPosition().x;
-        float dy = enemy.GetPosition().y - player.GetPosition().y;
-        float distSq = dx * dx + dy * dy;
-        float catchDist = player.GetRadius() + enemy.GetRadius();
 
-        if (distSq < catchDist * catchDist) {
-            isGameOver = true;
-            effectManager.PlayMissEffect(); // 借用震屏效果，模拟受击感
-            effectManager.ClearEchoes();    // 💥 感官剥夺：瞬间清空所有涟漪
-        }
+    // 地图涟漪扫描
+    if (isNoiseActive) {
+        levelMap.ScanByRipple(player.GetRippleCenter(), player.GetRippleRadius());
     }
 }
 
-
+// ==========================================
+// ▶ 4. 视觉渲染
+// ==========================================
 void Game::Draw()
 {
     float offsetX = effectManager.GetShakeOffsetX();
     float offsetY = effectManager.GetShakeOffsetY();
-
     setorigin((int)offsetX, (int)offsetY);
 
-    if (player.IsStunned()) {
-        setbkcolor(RGB(40, 0, 0));
-    }
-    else {
-        setbkcolor(BLACK);
-    }
-
+    if (player.IsStunned()) setbkcolor(RGB(40, 0, 0));
+    else setbkcolor(BLACK);
     cleardevice();
 
-    effectManager.DrawEchoes();
+    // ==========================================
+    // 🟢 修复：严格的画家算法渲染管线 (层级从底到高)
+    // ==========================================
+
+    // 层级 1：最底层，画墙壁和环境
     levelMap.Draw();
-    enemy.Draw();
+
+    // 层级 2：附着在环境上的记忆残影 (现在它会稳稳地压在墙上！)
+    effectManager.DrawEchoes();
+
+    // 层级 3：活着的敌人
+    for (Enemy& e : enemies) {
+        if (e.GetIsAlive()) e.Draw();
+    }
+
+    // 层级 4：玩家自己
     player.Draw();
+
+    // 层级 5：最顶层，刀光、火花、动态波纹必须在最上面！
     effectManager.DrawParticles();
 
     setorigin(0, 0);
 
+    // ... 下面的 战败全屏 UI 保持不变 ...
+
+    // 战败全屏 UI
     if (isGameOver) {
-        // 1. 盖一块纯黑的幕布，彻底剥夺视觉！
         setfillcolor(BLACK);
-        solidrectangle(0, 0, 800, 600);
+        solidrectangle(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-        // 2. 准备一个全屏大小的隐形矩形，用来让文字绝对居中
-        RECT rect = { 0, 0, 800, 600 };
-
-        // 3. 宣判文字
+        RECT rect = { 0, 0, GAME_WIDTH, GAME_HEIGHT };
         settextcolor(RGB(200, 0, 0));
         settextstyle(80, 0, _T("微软雅黑"));
         drawtext(_T("落 命"), &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
         settextcolor(WHITE);
         settextstyle(20, 0, _T("微软雅黑"));
-
-        // 这里的坐标 (320, 400) 是手动算好的大约在“落命”下方的位置
-        outtextxy(320, 400, _T("按 R 键重新轮回..."));
+        outtextxy(GAME_WIDTH / 2 - 80, GAME_HEIGHT / 2 + 100, _T("按 R 键重新轮回..."));
     }
 
     FlushBatchDraw();

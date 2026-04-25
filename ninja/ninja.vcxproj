@@ -155,6 +155,9 @@
     <None Include="reference\盲剑客：《白夜瞬闪》项目计划书.md" />
     <None Include="reference\计划.md" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="assets\levels\level1.txt" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
