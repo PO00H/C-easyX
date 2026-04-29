@@ -2,19 +2,20 @@
  *
  * [引擎核心逻辑] ENEMY.CPP
  *
- * @desc : AI 状态机的具体流转实现。剔除死代码，整合 Lerp 平滑转向。
+ * @desc : AI 状态机的具体流转实现。
+ * Day 13 纯净重构：纯逻辑层实现“环境光照劫持”与“黑暗恐慌模式”。
  *
  ******************************************************************************/
 #include "enemy.h"
-#include "map.h" // 💥 这里必须引入真正的地图头文件
+#include "map.h" 
 #include <graphics.h>
 #include <math.h>
+#include <stdlib.h> // 用于恐慌时的随机转头
 
 Enemy::Enemy(float startX, float startY) : Entity(startX, startY) {
-    Reset(Vector2D(startX, startY)); // 复用 Reset 逻辑
+    Reset(Vector2D(startX, startY));
 }
 
-// 💥 重生时的大脑清理
 void Enemy::Reset(Vector2D startPos) {
     position = startPos;
     isAlive = true;
@@ -25,6 +26,9 @@ void Enemy::Reset(Vector2D startPos) {
     moveDirection = 1;
     facingX = 1.0f;
     facingY = 0.0f;
+
+    // 💥 恢复正常视力
+    currentVisionRadius = ENEMY_SIGHT_RADIUS;
     ResetPatrolBounds();
 }
 
@@ -33,10 +37,25 @@ void Enemy::ResetPatrolBounds() {
     patrolEndX = position.x + ENEMY_PATROL_RADIUS;
 }
 
-// 💥 接入导航基站
 void Enemy::UpdateAI(Vector2D playerPos, bool isPlayerMakingNoise, Map& levelMap)
 {
     if (!isAlive) return;
+
+    // ---------------------------------------------------------
+    // 💥 Day13：最高优先级 - 环境光照劫持机制
+    // ---------------------------------------------------------
+    if (levelMap.GetIsAreaDark()) {
+        currentVisionRadius = 0.0f; // 瞬间致盲
+
+        // 突然灯黑了，强行打断巡逻和警戒，陷入恐慌！
+        if (currentState == EnemyState::PATROL || currentState == EnemyState::ALERT) {
+            currentState = EnemyState::PANIC_LISTEN;
+            stateTimer = 0;
+        }
+    }
+    else {
+        currentVisionRadius = ENEMY_SIGHT_RADIUS; // 恢复光明视力
+    }
 
     float dx = playerPos.x - position.x;
     float dy = playerPos.y - position.y;
@@ -51,6 +70,9 @@ void Enemy::UpdateAI(Vector2D playerPos, bool isPlayerMakingNoise, Map& levelMap
     float targetFacingX = facingX;
     float targetFacingY = facingY;
 
+    // ---------------------------------------------------------
+    // 🧠 状态机行为流转
+    // ---------------------------------------------------------
     switch (currentState) {
     case EnemyState::PATROL:
     {
@@ -64,7 +86,8 @@ void Enemy::UpdateAI(Vector2D playerPos, bool isPlayerMakingNoise, Map& levelMap
         bool isHeard = (isPlayerMakingNoise && distanceToPlayer < ENEMY_HEAR_RADIUS);
         bool isSeen = false;
 
-        if (distanceToPlayer < ENEMY_SIGHT_RADIUS) {
+        // 💥 使用动态视力 currentVisionRadius 替代原本的写死常量
+        if (distanceToPlayer < currentVisionRadius) {
             float dotProduct = (facingX * dirToPlayerX) + (facingY * dirToPlayerY);
             if (dotProduct > ENEMY_SIGHT_ANGLE) {
                 isSeen = true;
@@ -99,13 +122,11 @@ void Enemy::UpdateAI(Vector2D playerPos, bool isPlayerMakingNoise, Map& levelMap
     case EnemyState::CHASE:
     {
         if (distanceToPlayer > 0) {
-            // 💥 向 GPS 索要最佳规避路线
             Vector2D smartDir = levelMap.GetBestDirection(position, playerPos);
 
             position.x += smartDir.x * (speed * ENEMY_CHASE_MULT);
             position.y += smartDir.y * (speed * ENEMY_CHASE_MULT);
 
-            // 让敌人的脸顺着走路的方向看
             targetFacingX = smartDir.x;
             targetFacingY = smartDir.y;
         }
@@ -116,8 +137,28 @@ void Enemy::UpdateAI(Vector2D playerPos, bool isPlayerMakingNoise, Map& levelMap
         }
         break;
     }
+
+    // ---------------------------------------------------------
+    // 💥 Day13：新增的瞎子恐慌摸索状态
+    // ---------------------------------------------------------
+    case EnemyState::PANIC_LISTEN:
+    {
+        stateTimer++;
+        // 行为1：不敢走路，每 30 帧神经质地随机转头看
+        if (stateTimer % 30 == 0) {
+            targetFacingX = (rand() % 200 - 100) / 100.0f;
+            targetFacingY = (rand() % 200 - 100) / 100.0f;
+        }
+
+        // 行为2：听觉代偿，只要玩家发出一点声响，无视朝向，瞬间锁定追杀！
+        if (isPlayerMakingNoise && distanceToPlayer < ENEMY_HEAR_RADIUS) {
+            currentState = EnemyState::CHASE;
+        }
+        break;
+    }
     }
 
+    // 平滑转身插值算法
     facingX = facingX + (targetFacingX - facingX) * ENEMY_TURN_SPEED;
     facingY = facingY + (targetFacingY - facingY) * ENEMY_TURN_SPEED;
 
@@ -128,4 +169,7 @@ void Enemy::UpdateAI(Vector2D playerPos, bool isPlayerMakingNoise, Map& levelMap
     }
 }
 
-void Enemy::Draw() { return; }
+// 💥 彻底尊重你的架构：将视觉表现完全留给外部渲染器
+void Enemy::Draw() {
+    return;
+}

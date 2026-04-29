@@ -2,7 +2,7 @@
  *
  * [引擎核心图纸] PLAYER.H
  *
- * @desc : 盲剑客实体类。继承自基础 Entity，掌管玩家的核心输入响应、
+ * @desc  : 盲剑客实体类。继承自基础 Entity，掌管玩家的核心输入响应、
  * 蓄力一闪状态机、主动声呐波纹，以及撞墙眩晕的惩罚逻辑。
  *
  *=============================================================================
@@ -10,7 +10,7 @@
  *
  * ▶ 1. 生命周期与状态机 (Lifecycle & FSM)
  * ├─ Player()              : 初始化主角各项体征数值
- * ├─ Update()              : 处理衰减、眩晕拦截与键鼠输入
+ * ├─ Update()              : 处理衰减、眩晕拦截，并结合 Map 处理物理穿透
  * └─ Draw()                : 绘制主角、预测轨迹线与心跳光晕
  *
  * ▶ 2. 导演查询接口 (Director I/O)
@@ -26,6 +26,7 @@
  ******************************************************************************/
 #pragma once
 #include "entity.h"
+#include "map.h"
 
  // ==========================================
  // [ 主角专属常量配置 ] 
@@ -67,7 +68,9 @@ private:
 public:
     Player(float startX, float startY);
 
-    void Update(const ExMessage& msg) override;
+    // 💥 权力下放：注入 Map& levelMap，让玩家自己处理地形破甲
+    void Update(const ExMessage& msg) override {}
+    void Update(const ExMessage& msg, Map& levelMap);
     void Draw();
 
     // --- 导演查询接口 ---

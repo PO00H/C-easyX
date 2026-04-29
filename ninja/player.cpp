@@ -2,7 +2,8 @@
  *
  * [引擎核心逻辑] PLAYER.CPP
  *
- * @desc : 盲剑客控制器的具体实现。所有硬编码参数均已提炼至 player.h 的常量区。
+ * @desc : 盲剑客控制器的具体实现。
+ * Day 13 修复：引入 CCD (连续碰撞检测) 算法，彻底解决一闪高速穿模问题。
  *
  ******************************************************************************/
 #include "player.h"
@@ -17,25 +18,22 @@ Player::Player(float startX, float startY) : Entity(startX, startY)
     speed = PLAYER_BASE_SPEED;
     rotationAngle = 0.0f;
 
-    // 蓄力状态
     isCharging = false;
     chargePower = 0.0f;
 
-    // 刀光状态
     isSlashing = false;
     slashFrames = 0;
     auraTime = 0.0f;
     justSlashed = false;
 
-    // 波纹状态
     isRippleActive = false;
     rippleRadius = 0.0f;
 
-    // 眩晕状态
     stunTimer = 0;
 }
 
-void Player::Update(const ExMessage& msg)
+// 💥 核心调度：结合 Map 物理系统的 Update
+void Player::Update(const ExMessage& msg, Map& levelMap)
 {
     // ==========================================
     // 第一步：视觉动画层衰减 (不受硬直影响)
@@ -70,9 +68,7 @@ void Player::Update(const ExMessage& msg)
     if (GetAsyncKeyState(VK_LBUTTON) & 0x8000)
     {
         isCharging = true;
-
-        if (chargePower < PLAYER_MAX_CHARGE)
-        {
+        if (chargePower < PLAYER_MAX_CHARGE) {
             chargePower += PLAYER_CHARGE_RATE;
         }
         auraTime += 0.2f + (chargePower / PLAYER_MAX_CHARGE) * 0.8f;
@@ -81,19 +77,49 @@ void Player::Update(const ExMessage& msg)
     {
         if (isCharging == true)
         {
-            // 检测到松手，执行一闪
+            // 检测到松手，发起一闪突进
             float dashDistance = chargePower * 1.0f;
-
             slashStart = position;
 
-            position.x += cos(rotationAngle) * dashDistance;
-            position.y += sin(rotationAngle) * dashDistance;
+            // ---------------------------------------------------------
+            // 💥 修复核心：CCD (Continuous Collision Detection) 连续碰撞算法
+            // ---------------------------------------------------------
+            float moveDx = cos(rotationAngle) * dashDistance;
+            float moveDy = sin(rotationAngle) * dashDistance;
+
+            // 将高速移动切片，每步最多走 5 个像素，绝不漏掉任何一堵墙
+            int steps = (int)(dashDistance / 5.0f) + 1;
+            float stepX = moveDx / steps;
+            float stepY = moveDy / steps;
+
+            bool hitWall = false;
+            for (int i = 0; i < steps; i++) {
+                position.x += stepX;
+                position.y += stepY;
+
+                // 传入 true：破甲模式（无视竹林，但会被铁墙挡住）
+                position = levelMap.ResolveCollision(position, PLAYER_COLLISION_RAD, hitWall, true);
+
+                if (hitWall) {
+                    break; // 只要撞到不可破坏的墙，立刻刹车！
+                }
+            }
 
             slashEnd = position;
 
+            // ---------------------------------------------------------
+            // 💥 Day13 环境破坏：将突进轨迹上的竹林直接斩碎为平地
+            levelMap.SlashBamboo(slashStart, slashEnd);
+
+            // 启动刀光与震屏引线
             isSlashing = true;
             slashFrames = SLASH_EFFECT_FRAMES;
-            justSlashed = true; // 发出震屏引线
+            justSlashed = true;
+
+            // 如果最后 hitWall 是 true，触发眩晕惩罚！
+            if (hitWall) {
+                Stun();
+            }
 
             // 状态清零
             chargePower = 0.0f;
@@ -109,13 +135,18 @@ void Player::Update(const ExMessage& msg)
         rippleCenter = position;
     }
 
-    // --- 3. 处理移动与转动 ---
+    // --- 3. 处理常规移动与转动 ---
     if (!isCharging)
     {
         if (GetAsyncKeyState('W') & 0x8000) position.y -= speed;
         if (GetAsyncKeyState('S') & 0x8000) position.y += speed;
         if (GetAsyncKeyState('A') & 0x8000) position.x -= speed;
         if (GetAsyncKeyState('D') & 0x8000) position.x += speed;
+
+        // 常规移动步子很小，无需 CCD，直接单次检测即可
+        // 传入 false，代表没有在突进，会被竹林无情挡住
+        bool hitWall = false;
+        position = levelMap.ResolveCollision(position, PLAYER_COLLISION_RAD, hitWall, false);
 
         if (msg.message == WM_MOUSEMOVE)
         {
@@ -131,7 +162,6 @@ void Player::Update(const ExMessage& msg)
 // ==========================================
 void Player::Draw()
 {
-    // 1. 绘制眩晕警告色
     if (stunTimer > 0) {
         setfillcolor(RGB(200, 50, 50));
     }
@@ -139,24 +169,20 @@ void Player::Draw()
         setfillcolor(WHITE);
     }
 
-    // 2. 绘制蓄力 UI
     if (isCharging)
     {
         float previewDistance = chargePower * 1.0f;
         int targetX = (int)(position.x + cos(rotationAngle) * previewDistance);
         int targetY = (int)(position.y + sin(rotationAngle) * previewDistance);
 
-        // 轨迹虚线
         setlinecolor(YELLOW);
         setlinestyle(PS_DASH, 1);
         line((int)position.x, (int)position.y, targetX, targetY);
 
-        // 落点 X 标记
         setlinestyle(PS_SOLID, 2);
         line(targetX - 5, targetY - 5, targetX + 5, targetY + 5);
         line(targetX - 5, targetY + 5, targetX + 5, targetY - 5);
 
-        // 狂暴呼吸光晕
         setlinecolor(RED);
         float wobbleAmplitude = 5.0f + (chargePower * 0.02f);
         int currentRadius = (int)(25.0f + sin(auraTime) * wobbleAmplitude);
@@ -166,23 +192,20 @@ void Player::Draw()
         circle((int)position.x, (int)position.y, currentRadius);
     }
 
-    // 3. 绘制本体与朝向线
-    solidcircle((int)position.x, (int)position.y, 15);
+    solidcircle((int)position.x, (int)position.y, (int)PLAYER_COLLISION_RAD);
 
-    int lineEndX = (int)(position.x + cos(rotationAngle) * 30.0f);
-    int lineEndY = (int)(position.y + sin(rotationAngle) * 30.0f);
+    int lineEndX = (int)(position.x + cos(rotationAngle) * (PLAYER_COLLISION_RAD * 2));
+    int lineEndY = (int)(position.y + sin(rotationAngle) * (PLAYER_COLLISION_RAD * 2));
     setlinecolor(RED);
     setlinestyle(PS_SOLID, 3);
     line((int)position.x, (int)position.y, lineEndX, lineEndY);
 
-    // 4. 绘制一闪刀光残影
     if (isSlashing) {
         setlinecolor(WHITE);
         setlinestyle(PS_SOLID, slashFrames);
         line((int)slashStart.x, (int)slashStart.y, (int)slashEnd.x, (int)slashEnd.y);
     }
 
-    // 5. 绘制声呐波纹
     if (isRippleActive) {
         setlinecolor(WHITE);
         setlinestyle(PS_SOLID, 2);
@@ -207,7 +230,6 @@ void Player::Stun() {
 
     stunTimer = STUN_DURATION_FRAMES;
 
-    // 强行打断蓄力状态
     isCharging = false;
     chargePower = 0.0f;
     justSlashed = false;

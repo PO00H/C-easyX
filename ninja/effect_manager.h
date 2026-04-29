@@ -2,7 +2,7 @@
  *
  * [引擎核心图纸] EFFECT_MANAGER.H
  *
- * @desc : 游戏的视觉灵魂与反馈中枢。掌管屏幕震动、时间顿帧、
+ * @desc  : 游戏的视觉灵魂与反馈中枢。掌管屏幕震动、时间顿帧、
  * 高爆粒子物理、记忆残影叠加以及霓虹波纹扩散渲染。
  *
  *=============================================================================
@@ -14,6 +14,7 @@
  *
  * ▶ 2. 打击反馈系统 (Impact Feedback)
  * ├─ PlayMissEffect()      : 挥空反馈（轻微震动）
+ * ├─ PlayShake()           : 💥 Day13新增：一闪突进反馈（纯粹的中等震动）
  * └─ PlayHitEffect()       : 斩杀反馈（剧烈震动 + 顿帧 + 爆炸火花）
  *
  * ▶ 3. 视觉渲染管线 (Rendering Pipeline)
@@ -85,6 +86,7 @@ public:
 
     // --- 接口：打击系统 ---
     void PlayMissEffect();
+    void PlayShake(); // 💥 Day 13 新增：纯粹的突进画面震动
     void PlayHitEffect(Vector2D hitPos);
     bool IsHitStopping() const;
     float GetShakeOffsetX() const;
